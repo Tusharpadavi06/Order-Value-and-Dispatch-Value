@@ -9,6 +9,27 @@ const SUPABASE_URL = "https://xhwixancggufvekyvyzg.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhod2l4YW5jZ2d1ZnZla3l2eXpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3MTcxMjEsImV4cCI6MjA4NjI5MzEyMX0.xbrsZw2JgndRptEN-DaLqbRUs9vU2WpwqvwMJhYdDfw";
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyM6m7LOuWzW5qUg8b9ynxP3EzMfE9zrz71eld3-r1U2pROK9-GwZ8sNBQSx-MnDe6/exec"; 
 
+/**
+ * FIXED: Strictly generates a RFC4122 v4 compliant UUID.
+ * Supabase 'uuid' type will REJECT any numeric strings like timestamps.
+ */
+const generateStrictUUID = () => {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch (e) {
+    console.warn("crypto.randomUUID not available, using fallback.");
+  }
+  
+  // High-reliability fallback for UUID v4 format
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 const GinzaLogo = () => (
   <div className="flex items-center justify-center bg-white p-2 rounded-xl shadow-sm border border-slate-100">
     <img 
@@ -94,7 +115,9 @@ const App: React.FC = () => {
     }
     
     setIsSubmitting(true);
-    const submissionId = Date.now().toString();
+    
+    // FIX: Use generateStrictUUID instead of Date.now()
+    const submissionId = generateStrictUUID();
     
     const payload = {
       id: submissionId,
@@ -118,11 +141,11 @@ const App: React.FC = () => {
       });
 
       if (!supabaseResponse.ok) {
-        const errorData = await supabaseResponse.text();
-        throw new Error(`Supabase Error ${supabaseResponse.status}: ${errorData}`);
+        const errorData = await supabaseResponse.json();
+        throw new Error(`Supabase Error: ${errorData.message || 'Validation Failed'}`);
       }
 
-      // 2. Background Commit to Google Sheets (Fire and forget, no-cors)
+      // 2. Background Commit to Google Sheets
       fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -142,7 +165,7 @@ const App: React.FC = () => {
       setActiveTab('dashboard');
     } catch (err) {
       console.error("Critical Submission Error:", err);
-      alert(`Sync Failed: ${err instanceof Error ? err.message : 'Check internet connection.'}`);
+      alert(`Sync Failed: ${err instanceof Error ? err.message : 'Check connection.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -159,7 +182,6 @@ const App: React.FC = () => {
     };
 
     try {
-      // 1. Explicit PATCH for Updating existing row in Supabase
       const supabaseResponse = await fetch(`${SUPABASE_URL}/rest/v1/operational_logs?id=eq.${id}`, {
         method: 'PATCH',
         headers: {
@@ -176,7 +198,6 @@ const App: React.FC = () => {
         throw new Error(`Update Failed ${supabaseResponse.status}: ${errorData}`);
       }
 
-      // 2. Sync to Google Sheets
       fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
