@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { SubmissionPayload, DashboardFilters, UnitKey, TimeFilter } from '../types';
-import { UNITS } from '../constants';
+import { UNITS, DISPLAY_UNITS } from '../constants';
+import { formatIndianCurrency, numberToWordsIndian } from '../utils';
 
 interface DashboardViewProps {
   data: SubmissionPayload[];
@@ -20,6 +21,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
   });
 
   const [editingRecord, setEditingRecord] = useState<SubmissionPayload | null>(null);
+  const [showOrderWords, setShowOrderWords] = useState(false);
+  const [showDispatchWords, setShowDispatchWords] = useState(false);
 
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const years = Array.from({length: 10}, (_, i) => new Date().getFullYear() - i);
@@ -63,7 +66,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
 
     filteredData.forEach(entry => {
       UNITS.forEach(u => {
-        const unitData = entry.units[u] || (entry.units as any)['KNITTING DISPATCH CURCULAR'] || { orderValue: 0, dispatchValue: 0 };
+        // Robust lookup for renamed units or typos in history
+        let unitData = entry.units[u];
+        if (!unitData) {
+          if (u === 'CURCULAR KNITTING UNIT') {
+            unitData = (entry.units as any)['KNITTING DISPATCH CIRCULAR'] || (entry.units as any)['KNITTING DISPATCH CURCULAR'] || (entry.units as any)['CIRCULAR KNITTING UNIT'];
+          }
+        }
+        unitData = unitData || { orderValue: 0, dispatchValue: 0 };
+        
         const order = parseFloat(unitData.orderValue?.toString()) || 0;
         const dispatch = parseFloat(unitData.dispatchValue?.toString()) || 0;
         
@@ -80,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
     if (!editingRecord) return;
     const newUnits = { ...editingRecord.units };
     if (!newUnits[unit]) newUnits[unit] = { orderValue: 0, dispatchValue: 0 };
-    newUnits[unit] = { ...newUnits[unit], [field]: value };
+    newUnits[unit] = { ...newUnits[unit], [field]: Math.round(value) };
 
     const newTotals = UNITS.reduce((acc, u) => {
       const uData = newUnits[u] || { orderValue: 0, dispatchValue: 0 };
@@ -113,8 +124,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
             
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {UNITS.map(u => {
-                  const unitData = editingRecord.units[u] || { orderValue: 0, dispatchValue: 0 };
+                {DISPLAY_UNITS.map(u => {
+                  const unitData = editingRecord.units[u] || (u === 'CURCULAR KNITTING UNIT' ? ((editingRecord.units as any)['KNITTING DISPATCH CIRCULAR'] || (editingRecord.units as any)['KNITTING DISPATCH CURCULAR'] || (editingRecord.units as any)['CIRCULAR KNITTING UNIT']) : null) || { orderValue: 0, dispatchValue: 0 };
                   return (
                     <div key={u} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                       <p className="text-[9px] font-black text-slate-900 uppercase tracking-tight mb-4 truncate" title={u}>{u}</p>
@@ -124,7 +135,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
                           <input 
                             type="number" 
                             value={unitData.orderValue || ''}
-                            onChange={(e) => handleEditChange(u, 'orderValue', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleEditChange(u, 'orderValue', Math.round(parseFloat(e.target.value) || 0))}
                             className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-[12px] font-bold focus:ring-2 focus:ring-slate-900/5 outline-none"
                           />
                         </div>
@@ -133,7 +144,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
                           <input 
                             type="number" 
                             value={unitData.dispatchValue || ''}
-                            onChange={(e) => handleEditChange(u, 'dispatchValue', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleEditChange(u, 'dispatchValue', Math.round(parseFloat(e.target.value) || 0))}
                             className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-[12px] font-bold text-[#E11D48] focus:ring-2 focus:ring-rose-900/5 outline-none"
                           />
                         </div>
@@ -148,11 +159,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
               <div className="flex gap-10">
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Order</p>
-                  <p className="text-2xl font-black text-slate-900">₹{editingRecord.totalOrder.toLocaleString()}</p>
+                  <p className="text-2xl font-black text-slate-900">{formatIndianCurrency(editingRecord.totalOrder)}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-[#E11D48] uppercase tracking-widest mb-1">Total Dispatch</p>
-                  <p className="text-2xl font-black text-[#E11D48]">₹{editingRecord.totalDispatch.toLocaleString()}</p>
+                  <p className="text-2xl font-black text-[#E11D48]">{formatIndianCurrency(editingRecord.totalDispatch)}</p>
                 </div>
               </div>
               <div className="flex gap-3 w-full md:w-auto">
@@ -199,16 +210,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
       </div>
 
       {/* Aggregate KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-slate-900"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Order Intake</p>
-          <h4 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">₹{stats.totals.order.toLocaleString()}</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div 
+          onClick={() => setShowOrderWords(!showOrderWords)}
+          className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group cursor-pointer hover:border-slate-400 transition-all"
+        >
+          <div className="absolute top-0 left-0 w-1 h-full bg-slate-900"></div>
+          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Order Intake</p>
+          <h4 className="text-base md:text-lg font-black text-slate-900 tracking-tighter">
+            {formatIndianCurrency(stats.totals.order)}
+          </h4>
+          {showOrderWords && (
+            <p className="text-[8px] font-bold text-slate-500 mt-1 italic animate-fade-in">
+              {numberToWordsIndian(stats.totals.order)}
+            </p>
+          )}
         </div>
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-[#E11D48]"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Dispatch Output</p>
-          <h4 className="text-3xl md:text-5xl font-black text-[#E11D48] tracking-tighter">₹{stats.totals.dispatch.toLocaleString()}</h4>
+        <div 
+          onClick={() => setShowDispatchWords(!showDispatchWords)}
+          className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group cursor-pointer hover:border-rose-400 transition-all"
+        >
+          <div className="absolute top-0 left-0 w-1 h-full bg-[#E11D48]"></div>
+          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Dispatch Output</p>
+          <h4 className="text-base md:text-lg font-black text-[#E11D48] tracking-tighter">
+            {formatIndianCurrency(stats.totals.dispatch)}
+          </h4>
+          {showDispatchWords && (
+            <p className="text-[8px] font-bold text-rose-400 mt-1 italic animate-fade-in">
+              {numberToWordsIndian(stats.totals.dispatch)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -218,17 +249,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
           <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em]">Unit-Wise Performance Stats</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-4">
-          {UNITS.map(u => (
+          {DISPLAY_UNITS.map(u => (
             <div key={u} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group border-b-4 border-b-transparent hover:border-b-[#E11D48]">
               <p className="text-[9px] font-black text-slate-900 uppercase truncate mb-4" title={u}>{u}</p>
               <div className="space-y-3">
                 <div className="flex flex-col">
                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Order</span>
-                  <span className="text-[12px] font-black text-slate-900">₹{stats.unitBreakdown[u].order.toLocaleString()}</span>
+                  <span className="text-[11px] font-black text-slate-900">{formatIndianCurrency(stats.unitBreakdown[u].order)}</span>
                 </div>
-                <div className="flex flex-col pt-2 border-t border-slate-50">
+                <div className="flex flex-col pt-1 border-t border-slate-50">
                   <span className="text-[7px] font-black text-[#E11D48] uppercase tracking-tighter">Dispatch</span>
-                  <span className="text-[12px] font-black text-[#E11D48]">₹{stats.unitBreakdown[u].dispatch.toLocaleString()}</span>
+                  <span className="text-[11px] font-black text-[#E11D48]">{formatIndianCurrency(stats.unitBreakdown[u].dispatch)}</span>
                 </div>
               </div>
             </div>
@@ -252,38 +283,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
           </div>
         </div>
         
-        <div className="h-[500px] flex items-end gap-3 md:gap-6 overflow-x-auto pb-10 px-4 custom-scrollbar">
-          {UNITS.map(u => {
+        <div className="space-y-6 overflow-y-auto max-h-[800px] pr-4 custom-scrollbar">
+          {DISPLAY_UNITS.map(u => {
             const unitOrder = stats.unitBreakdown[u].order;
             const unitDispatch = stats.unitBreakdown[u].dispatch;
-            const orderH = (unitOrder / maxChartValue) * 350;
-            const dispatchH = (unitDispatch / maxChartValue) * 350;
+            const orderW = (unitOrder / maxChartValue) * 85; // Leave space for labels
+            const dispatchW = (unitDispatch / maxChartValue) * 85;
 
             return (
-              <div key={u} className="flex-none w-[110px] flex flex-col items-center group">
-                <div className="w-full flex justify-center items-end gap-2 h-[350px] mb-6">
-                  {/* Order Bar */}
-                  <div style={{ height: `${Math.max(orderH, 15)}px` }} className="w-6 bg-slate-900 rounded-t-md transition-all group-hover:bg-slate-700 relative flex items-center justify-center">
-                    {unitOrder > 0 && (
-                      <span className="absolute inset-0 flex items-center justify-center text-blue-400 font-black text-[9px] [writing-mode:vertical-rl] rotate-180 z-20">
-                        {unitOrder.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                  {/* Dispatch Bar */}
-                  <div style={{ height: `${Math.max(dispatchH, 15)}px` }} className="w-6 bg-[#E11D48] rounded-t-md transition-all group-hover:bg-rose-500 relative flex items-center justify-center">
-                    {unitDispatch > 0 && (
-                      <span className="absolute inset-0 flex items-center justify-center text-blue-200 font-black text-[9px] [writing-mode:vertical-rl] rotate-180 z-20">
-                        {unitDispatch.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* Vertical Unit Label - UPDATED TO BLUE BOLD */}
-                <div className="h-28 flex items-start justify-center pt-2">
-                  <p className="text-[11px] font-black text-blue-600 uppercase transform -rotate-90 whitespace-nowrap origin-center tracking-tight w-6 text-center">
-                    {u}
-                  </p>
+              <div key={u} className="group">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                   <p className="text-[10px] font-black text-slate-700 uppercase w-full md:w-48 truncate" title={u}>{u}</p>
+                   <div className="flex-1 flex flex-col gap-1.5">
+                      {/* Order Bar */}
+                      <div className="flex items-center">
+                        <div style={{ width: `${Math.max(orderW, 0.5)}%` }} className="h-4 bg-slate-900 rounded-r-sm transition-all group-hover:bg-slate-700 relative flex items-center">
+                           {unitOrder > 0 && (
+                             <span className="absolute left-full ml-2 text-slate-900 font-black text-[9px] whitespace-nowrap">
+                               {unitOrder.toLocaleString()}
+                             </span>
+                           )}
+                        </div>
+                      </div>
+                      {/* Dispatch Bar */}
+                      <div className="flex items-center">
+                        <div style={{ width: `${Math.max(dispatchW, 0.5)}%` }} className="h-4 bg-[#E11D48] rounded-r-sm transition-all group-hover:bg-rose-500 relative flex items-center">
+                           {unitDispatch > 0 && (
+                             <span className="absolute left-full ml-2 text-[#E11D48] font-black text-[9px] whitespace-nowrap">
+                               {unitDispatch.toLocaleString()}
+                             </span>
+                           )}
+                        </div>
+                      </div>
+                   </div>
                 </div>
               </div>
             );
@@ -298,29 +330,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
           <span className="text-[10px] font-bold text-slate-400">{filteredData.length} Records Found</span>
         </div>
         
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
-          <div className="overflow-auto max-h-[650px] scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+        <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-xl overflow-hidden">
+          <div className="overflow-auto max-h-[600px] scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-[60] bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
+              <thead className="sticky top-0 z-[60] bg-slate-900 text-white text-[9px] font-black uppercase tracking-wider">
                 <tr>
-                  <th className="sticky left-0 top-0 z-[70] bg-slate-900 py-6 px-10 text-left border-r border-white/10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] min-w-[150px]">Record Date</th>
-                  <th className="py-6 px-8 border-r border-white/10 min-w-[150px] text-right bg-slate-800">Total Order</th>
-                  <th className="py-6 px-8 border-r border-white/10 min-w-[150px] text-right bg-[#E11D48]">Total Dispatch</th>
-                  {UNITS.map(u => (
-                    <th key={u} colSpan={2} className="py-6 px-8 border-r border-white/10 min-w-[280px] text-center bg-slate-800/50">
+                  <th className="sticky left-0 top-0 z-[70] bg-slate-900 py-4 px-6 text-left border-r border-white/10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] min-w-[120px]">Record Date</th>
+                  <th className="py-4 px-6 border-r border-white/10 min-w-[140px] text-right bg-slate-800 whitespace-nowrap">Total Order</th>
+                  <th className="py-4 px-6 border-r border-white/10 min-w-[140px] text-right bg-[#E11D48] whitespace-nowrap">Total Dispatch</th>
+                  {DISPLAY_UNITS.map(u => (
+                    <th key={u} colSpan={2} className="py-4 px-6 border-r border-white/10 min-w-[240px] text-center bg-slate-800/50">
                       {u}
                     </th>
                   ))}
-                  <th className="py-6 px-8 text-center min-w-[100px]">Action</th>
+                  <th className="py-4 px-6 text-center min-w-[80px]">Action</th>
                 </tr>
-                <tr className="bg-slate-800 text-[8px] sticky top-[68px] z-[60]">
-                   <th className="sticky left-0 z-[70] bg-slate-800 border-r border-white/5 shadow-[2px_0_5px_rgba(0,0,0,0.1)] py-2"></th>
+                <tr className="bg-slate-800 text-[7px] sticky top-[48px] z-[60]">
+                   <th className="sticky left-0 z-[70] bg-slate-800 border-r border-white/5 shadow-[2px_0_5px_rgba(0,0,0,0.1)] py-1.5"></th>
                    <th className="border-r border-white/5 text-right font-black">₹ SUM</th>
                    <th className="border-r border-white/5 text-right font-black">₹ SUM</th>
-                   {UNITS.map(u => (
+                   {DISPLAY_UNITS.map(u => (
                      <React.Fragment key={`${u}-sub`}>
-                        <th className="py-2 px-4 border-r border-white/5 text-center text-slate-400 uppercase tracking-tighter">Order</th>
-                        <th className="py-2 px-4 border-r border-white/5 text-center text-rose-300 uppercase tracking-tighter">Dispatch</th>
+                        <th className="py-1.5 px-3 border-r border-white/5 text-center text-slate-400 uppercase tracking-tighter">Order</th>
+                        <th className="py-1.5 px-3 border-r border-white/5 text-center text-rose-300 uppercase tracking-tighter">Dispatch</th>
                      </React.Fragment>
                    ))}
                    <th></th>
@@ -329,31 +361,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
               <tbody className="divide-y divide-slate-100">
                 {filteredData.map(entry => (
                   <tr key={entry.id} className="hover:bg-slate-50 transition-all group">
-                    <td className="sticky left-0 z-50 bg-white group-hover:bg-slate-50 py-5 px-10 border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                      <span className="font-black text-slate-900 text-sm whitespace-nowrap">{formatDate(entry.date)}</span>
+                    <td className="sticky left-0 z-50 bg-white group-hover:bg-slate-50 py-2 px-6 border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                      <span className="font-black text-slate-900 text-[10px] whitespace-nowrap">{formatDate(entry.date)}</span>
                     </td>
-                    <td className="py-5 px-8 border-r border-slate-50 text-right font-black text-slate-900 bg-slate-50/30">₹{entry.totalOrder.toLocaleString()}</td>
-                    <td className="py-5 px-8 border-r border-slate-50 text-right font-black text-[#E11D48] bg-rose-50/10">₹{entry.totalDispatch.toLocaleString()}</td>
-                    {UNITS.map(u => {
-                      const unitData = entry.units[u] || (entry.units as any)['KNITTING DISPATCH CURCULAR'] || { orderValue: 0, dispatchValue: 0 };
+                    <td className="py-2 px-6 border-r border-slate-50 text-right font-black text-slate-900 bg-slate-50/30 text-[10px]">{formatIndianCurrency(entry.totalOrder)}</td>
+                    <td className="py-2 px-6 border-r border-slate-50 text-right font-black text-[#E11D48] bg-rose-50/10 text-[10px]">{formatIndianCurrency(entry.totalDispatch)}</td>
+                    {DISPLAY_UNITS.map(u => {
+                      const unitData = entry.units[u] || (u === 'CURCULAR KNITTING UNIT' ? ((entry.units as any)['KNITTING DISPATCH CIRCULAR'] || (entry.units as any)['KNITTING DISPATCH CURCULAR'] || (entry.units as any)['CIRCULAR KNITTING UNIT']) : null) || { orderValue: 0, dispatchValue: 0 };
                       return (
                         <React.Fragment key={`${entry.id}-${u}`}>
-                          <td className="py-5 px-4 border-r border-slate-50 text-right text-[11px] font-bold text-slate-600">
-                            {unitData.orderValue.toLocaleString()}
+                          <td className="py-2 px-4 border-r border-slate-50 text-right text-[9px] font-bold text-slate-600">
+                            {formatIndianCurrency(unitData.orderValue).replace('₹ ', '')}
                           </td>
-                          <td className="py-5 px-4 border-r border-slate-100 text-right text-[11px] font-bold text-[#E11D48]">
-                            {unitData.dispatchValue.toLocaleString()}
+                          <td className="py-2 px-4 border-r border-slate-100 text-right text-[9px] font-bold text-[#E11D48]">
+                            {formatIndianCurrency(unitData.dispatchValue).replace('₹ ', '')}
                           </td>
                         </React.Fragment>
                       );
                     })}
-                    <td className="py-5 px-8 text-center">
+                    <td className="py-2 px-6 text-center">
                       <button 
                         onClick={() => setEditingRecord(entry)}
-                        className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center mx-auto"
+                        className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center mx-auto"
                         title="Edit Record"
                       >
-                        <i className="fas fa-edit text-xs"></i>
+                        <i className="fas fa-edit text-[9px]"></i>
                       </button>
                     </td>
                   </tr>

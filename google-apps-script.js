@@ -6,7 +6,7 @@
 
 const SHEET_ID = "1j7zhkwKZYAufxkwsEUBHnauqMowQ_IPaQT5sVYFpT2w";
 const UNITS = [
-  "KNITTING DISPATCH CURCULAR",
+  "CURCULAR KNITTING UNIT",
   "CROCHET",
   "DAMAN ELASTIC",
   "DIGITAL PRINTING FABRIC",
@@ -48,17 +48,17 @@ function doPost(e) {
     const incomingId = data.id ? data.id.toString() : "";
     const incomingDateStr = data.date ? data.date.toString() : ""; 
 
-    // 1. SEARCH FOR ROW
+    // 1. SEARCH FOR ROW BY ID OR DATE
     for (let i = 0; i < rows.length; i++) {
-      // Primary Search: Match by ID
+      // Match by ID (Column A)
       if (incomingId && rows[i][0] && rows[i][0].toString() === incomingId) {
         rowIndex = i;
         break;
       }
       
-      // Secondary Search: Match by Date (Fallback for safety)
+      // Fallback: Match by Date (Column B)
       if (incomingDateStr) {
-        let cellValue = rows[i][1];
+        let cellValue = rows[i][1]; 
         let sheetDateStr = "";
         
         if (cellValue instanceof Date) {
@@ -78,24 +78,25 @@ function doPost(e) {
       }
     }
 
-    // 2. CONSTRUCT ROW PAYLOAD
-    const row = [incomingId || "N/A", data.date || "N/A"];
+    // 2. CONSTRUCT DATA ROW (Starting from Column B: Date + 16 Units * 2)
+    const dataRow = [data.date || "N/A"]; // Column B
     UNITS.forEach(function(u) {
-      const unitInfo = (data.units && (data.units[u] || data.units['KNITTING DISPATCH CIRCULAR'])) 
-                        ? (data.units[u] || data.units['KNITTING DISPATCH CIRCULAR']) 
+      const unitInfo = (data.units && data.units[u]) 
+                        ? data.units[u] 
                         : { orderValue: 0, dispatchValue: 0 };
-      row.push(parseFloat(unitInfo.orderValue) || 0);
-      row.push(parseFloat(unitInfo.dispatchValue) || 0);
+      dataRow.push(parseFloat(unitInfo.orderValue) || 0);
+      dataRow.push(parseFloat(unitInfo.dispatchValue) || 0);
     });
-    row.push(parseFloat(data.totalOrder) || 0);
-    row.push(parseFloat(data.totalDispatch) || 0);
 
     // 3. APPLY UPSERT
     if (rowIndex !== -1) {
-      sheet.getRange(rowIndex + 1, 1, 1, row.length).setValues([row]);
+      // Update Column B onwards (leave Column A/ID as is)
+      sheet.getRange(rowIndex + 1, 2, 1, dataRow.length).setValues([dataRow]);
       return ContentService.createTextOutput("SUCCESS: Record Updated").setMimeType(ContentService.MimeType.TEXT);
     } else {
-      sheet.appendRow(row);
+      // New Record: Write ID to A, and dataRow to B onwards
+      const finalRow = [incomingId || "NEW"].concat(dataRow);
+      sheet.appendRow(finalRow);
       return ContentService.createTextOutput("SUCCESS: Record Created").setMimeType(ContentService.MimeType.TEXT);
     }
       
@@ -119,10 +120,11 @@ function doGet() {
     
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[0] || r[0].toString().toLowerCase().includes("id") || r[0] === "N/A") continue;
+      // Skip header or empty rows (Check Column B for Date)
+      if (!r[1] || r[1].toString().toLowerCase().includes("date") || r[1] === "N/A") continue;
       
       try {
-        let dateVal = r[1];
+        let dateVal = r[1]; // Date is in Column B
         if (dateVal instanceof Date) { 
           dateVal = Utilities.formatDate(dateVal, tz, "yyyy-MM-dd"); 
         } else { 
@@ -130,22 +132,22 @@ function doGet() {
         }
 
         const payload = {
-          id: r[0].toString(),
+          id: r[0] ? r[0].toString() : dateVal, // ID is in Column A
           date: dateVal,
           units: {},
           totalOrder: 0,
           totalDispatch: 0
         };
         
-        let col = 2;
+        let col = 2; // Units start at Column C (index 2)
         UNITS.forEach(u => {
           const o = parseFloat(r[col]) || 0;
           const d = parseFloat(r[col+1]) || 0;
           payload.units[u] = { orderValue: o, dispatchValue: d };
+          payload.totalOrder += o;
+          payload.totalDispatch += d;
           col += 2;
         });
-        payload.totalOrder = parseFloat(r[col]) || 0;
-        payload.totalDispatch = parseFloat(r[col+1]) || 0;
         resultData.push(payload);
       } catch (rowErr) {}
     }

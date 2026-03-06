@@ -1,6 +1,6 @@
 
 export type UnitKey = 
-  | 'KNITTING DISPATCH CIRCULAR'
+  | 'CURCULAR KNITTING UNIT'
   | 'CROCHET'
   | 'DAMAN ELASTIC'
   | 'DIGITAL PRINTING FABRIC'
@@ -33,6 +33,44 @@ export interface SubmissionPayload {
 }
 
 export type TimeFilter = 'day' | 'month' | 'year' | 'all';
+
+export interface OrderItem {
+  id: string;
+  productionUnit: string;
+  department: string;
+  itemName: string;
+  color: string;
+  width: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  discount: number;
+  deliveryDate: string;
+  remark: string;
+  preview?: string;
+}
+
+export interface Order {
+  id: string;
+  customerName: string;
+  customerNo: string;
+  billingAddress: string;
+  deliveryAddress: string;
+  orderDate: string;
+  items: OrderItem[];
+  salesman: string;
+  salesmanContact: string;
+  orderRemarks: string;
+  createdAt: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  customerNo: string;
+  billingAddress: string;
+  deliveryAddress: string;
+}
 
 export interface DashboardFilters {
   unit: UnitKey | 'ALL';

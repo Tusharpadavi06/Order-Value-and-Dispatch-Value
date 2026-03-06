@@ -1,34 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { UNITS, INITIAL_FORM_STATE } from './constants';
+import { UNITS, DISPLAY_UNITS, INITIAL_FORM_STATE } from './constants';
 import { FormDataState, UnitKey, UnitData, SubmissionPayload } from './types';
 import { UnitRow } from './components/UnitRow';
 import { DashboardView } from './components/DashboardView';
+import { formatIndianCurrency } from './utils';
 
 const SUPABASE_URL = "https://xhwixancggufvekyvyzg.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhod2l4YW5jZ2d1ZnZla3l2eXpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3MTcxMjEsImV4cCI6MjA4NjI5MzEyMX0.xbrsZw2JgndRptEN-DaLqbRUs9vU2WpwqvwMJhYdDfw";
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyM6m7LOuWzW5qUg8b9ynxP3EzMfE9zrz71eld3-r1U2pROK9-GwZ8sNBQSx-MnDe6/exec"; 
-
-/**
- * FIXED: Strictly generates a RFC4122 v4 compliant UUID.
- * Supabase 'uuid' type will REJECT any numeric strings like timestamps.
- */
-const generateStrictUUID = () => {
-  try {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-  } catch (e) {
-    console.warn("crypto.randomUUID not available, using fallback.");
-  }
-  
-  // High-reliability fallback for UUID v4 format
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
 
 const GinzaLogo = () => (
   <div className="flex items-center justify-center bg-white p-2 rounded-xl shadow-sm border border-slate-100">
@@ -41,7 +21,7 @@ const GinzaLogo = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'form' | 'dashboard'>('form');
+  const [activeTab, setActiveTab] = useState<'commit' | 'dashboard'>('dashboard');
   const [formData, setFormData] = useState<FormDataState>(INITIAL_FORM_STATE);
   const [currentDate, setCurrentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [history, setHistory] = useState<SubmissionPayload[]>([]);
@@ -115,9 +95,7 @@ const App: React.FC = () => {
     }
     
     setIsSubmitting(true);
-    
-    // FIX: Use generateStrictUUID instead of Date.now()
-    const submissionId = generateStrictUUID();
+    const submissionId = crypto.randomUUID();
     
     const payload = {
       id: submissionId,
@@ -141,11 +119,11 @@ const App: React.FC = () => {
       });
 
       if (!supabaseResponse.ok) {
-        const errorData = await supabaseResponse.json();
-        throw new Error(`Supabase Error: ${errorData.message || 'Validation Failed'}`);
+        const errorData = await supabaseResponse.text();
+        throw new Error(`Supabase Error ${supabaseResponse.status}: ${errorData}`);
       }
 
-      // 2. Background Commit to Google Sheets
+      // 2. Background Commit to Google Sheets (Fire and forget, no-cors)
       fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -165,7 +143,7 @@ const App: React.FC = () => {
       setActiveTab('dashboard');
     } catch (err) {
       console.error("Critical Submission Error:", err);
-      alert(`Sync Failed: ${err instanceof Error ? err.message : 'Check connection.'}`);
+      alert(`Sync Failed: ${err instanceof Error ? err.message : 'Check internet connection.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -182,6 +160,7 @@ const App: React.FC = () => {
     };
 
     try {
+      // 1. Explicit PATCH for Updating existing row in Supabase
       const supabaseResponse = await fetch(`${SUPABASE_URL}/rest/v1/operational_logs?id=eq.${id}`, {
         method: 'PATCH',
         headers: {
@@ -198,6 +177,7 @@ const App: React.FC = () => {
         throw new Error(`Update Failed ${supabaseResponse.status}: ${errorData}`);
       }
 
+      // 2. Sync to Google Sheets
       fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -241,52 +221,52 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 gap-1 w-full lg:w-auto shadow-inner">
-            <button onClick={() => setActiveTab('form')} className={`flex-1 md:flex-none px-6 md:px-12 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'form' ? 'bg-white text-[#E11D48] shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>
-              Commit Entry
-            </button>
-            <button onClick={() => setActiveTab('dashboard')} className={`flex-1 md:flex-none px-6 md:px-12 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-white text-[#E11D48] shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 w-full lg:w-auto shadow-inner">
+            <button onClick={() => setActiveTab('dashboard')} className={`flex-1 md:flex-none px-6 md:px-10 py-2.5 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-[#E11D48] shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>
               Intelligence Hub
-              {history.length > 0 && <span className="ml-2 bg-[#E11D48] text-white text-[9px] px-2 py-0.5 rounded-full">{history.length}</span>}
+              {history.length > 0 && <span className="ml-2 bg-[#E11D48] text-white text-[8px] px-1.5 py-0.5 rounded-full">{history.length}</span>}
+            </button>
+            <button onClick={() => setActiveTab('commit')} className={`flex-1 md:flex-none px-6 md:px-10 py-2.5 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'commit' ? 'bg-white text-[#E11D48] shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>
+              Commit Entry
             </button>
           </div>
         </header>
 
         <main className="animate-fade-in">
-          {activeTab === 'form' ? (
-            <div className="space-y-6 md:space-y-8 pb-20 max-w-7xl mx-auto">
-              <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
-                <div className="flex items-center gap-6">
-                  <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-[#E11D48]">
-                    <i className="fas fa-calendar-day text-2xl"></i>
+          {activeTab === 'commit' ? (
+            <div className="space-y-3 md:space-y-4 pb-4 max-w-5xl mx-auto">
+              <div className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-rose-50 rounded-lg flex items-center justify-center text-[#E11D48]">
+                    <i className="fas fa-calendar-day text-sm"></i>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-left">Target Date</label>
-                    <input type="date" value={currentDate} onChange={e => setCurrentDate(e.target.value)} className="text-2xl md:text-3xl font-black text-slate-900 bg-transparent border-none focus:ring-0 p-0 cursor-pointer" />
+                    <label className="block text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0 text-left">Target Date</label>
+                    <input type="date" value={currentDate} onChange={e => setCurrentDate(e.target.value)} className="text-sm md:text-base font-black text-slate-900 bg-transparent border-none focus:ring-0 p-0 cursor-pointer" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden">
+              <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left table-fixed min-w-[320px]">
                     <thead className="bg-slate-900 text-white">
-                      <tr className="text-[10px] font-black uppercase tracking-[0.2em]">
-                        <th className="py-6 md:py-10 px-6 md:px-12 w-1/4">Business Unit</th>
-                        <th className="py-6 md:py-10 px-4 md:px-12 text-center w-3/8">Order Intake (₹)</th>
-                        <th className="py-6 md:py-10 px-4 md:px-12 text-center w-3/8">Dispatch Output (₹)</th>
+                      <tr className="text-[9px] font-black uppercase tracking-widest">
+                        <th className="py-4 md:py-5 px-6 md:px-8 w-1/4">Business Unit</th>
+                        <th className="py-4 md:py-5 px-4 md:px-8 text-center w-3/8">Order Intake (₹)</th>
+                        <th className="py-4 md:py-5 px-4 md:px-8 text-center w-3/8">Dispatch Output (₹)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {UNITS.map(unit => (
+                      {DISPLAY_UNITS.map(unit => (
                         <UnitRow key={unit} unit={unit} data={formData[unit]} onChange={(u, f, v) => setFormData(prev => ({ ...prev, [u]: { ...prev[u], [f]: v } }))} />
                       ))}
                     </tbody>
                     <tfoot className="bg-slate-50/90">
                       <tr className="font-black">
-                        <td className="py-8 md:py-16 px-6 md:px-12 text-slate-400 text-[11px] uppercase tracking-[0.3em]">Aggregate Period Totals</td>
-                        <td className="py-8 md:py-16 px-4 md:px-12 text-center text-2xl md:text-5xl tracking-tighter">₹{totals.order.toLocaleString()}</td>
-                        <td className="py-8 md:py-16 px-4 md:px-12 text-center text-2xl md:text-5xl text-[#E11D48] tracking-tighter">₹{totals.dispatch.toLocaleString()}</td>
+                        <td className="py-4 md:py-6 px-6 md:px-8 text-slate-400 text-[9px] uppercase tracking-widest">Aggregate Period Totals</td>
+                        <td className="py-4 md:py-6 px-4 md:px-8 text-center text-base md:text-lg tracking-tighter">{formatIndianCurrency(totals.order)}</td>
+                        <td className="py-4 md:py-6 px-4 md:px-8 text-center text-base md:text-lg text-[#E11D48] tracking-tighter">{formatIndianCurrency(totals.dispatch)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -296,12 +276,12 @@ const App: React.FC = () => {
               <button 
                 onClick={handleSubmit} 
                 disabled={isSubmitting || (totals.order === 0 && totals.dispatch === 0)} 
-                className="w-full py-6 md:py-10 bg-slate-900 text-white font-black text-[12px] uppercase tracking-[0.5em] rounded-[2.5rem] shadow-2xl hover:bg-[#E11D48] transition-all disabled:opacity-30 flex items-center justify-center gap-4"
+                className="w-full py-4 md:py-5 bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl shadow-xl hover:bg-[#E11D48] transition-all disabled:opacity-30 flex items-center justify-center gap-3"
               >
                 {isSubmitting ? (
                   <>
                     <i className="fas fa-sync animate-spin"></i>
-                    Syncing Central Cloud...
+                    Syncing...
                   </>
                 ) : 'Commit Official Log'}
               </button>
@@ -311,7 +291,7 @@ const App: React.FC = () => {
           )}
         </main>
       </div>
-      <footer className="py-12 text-center">
+      <footer className="py-2 text-center">
         <p className="text-slate-300 text-[10px] font-black uppercase tracking-[0.6em]">Ginza Group Centralized Intelligence Engine</p>
       </footer>
     </div>
