@@ -15,7 +15,12 @@ export type UnitKey =
   | 'TORCHAN LACE'
   | 'UDHNA'
   | 'VALUE ADDITION'
-  | 'WARP WEFT FABRICS';
+  | 'WARP WEFT FABRICS'
+  | 'APPAREL PARK'
+  | 'AMBERNATH LINGERIES UNIT'
+  | 'SOIE'
+  | 'SACHIN GARMENT'
+  | 'GINZA LIFE STYLE';
 
 export interface UnitData {
   orderValue: number;
@@ -32,7 +37,7 @@ export interface SubmissionPayload {
   totalDispatch: number;
 }
 
-export type TimeFilter = 'day' | 'month' | 'year' | 'all';
+export type TimeFilter = 'day' | 'month' | 'year' | 'all' | 'range';
 
 export interface OrderItem {
   id: string;
@@ -76,6 +81,8 @@ export interface DashboardFilters {
   unit: UnitKey | 'ALL';
   range: TimeFilter;
   selectedDate?: string;
+  startDate?: string;
+  endDate?: string;
   selectedMonth?: number;
   selectedYear?: number;
 }

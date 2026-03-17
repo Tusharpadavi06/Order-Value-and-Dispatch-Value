@@ -17,7 +17,12 @@ export const UNITS: UnitKey[] = [
   'TORCHAN LACE',
   'UDHNA',
   'VALUE ADDITION',
-  'WARP WEFT FABRICS'
+  'WARP WEFT FABRICS',
+  'APPAREL PARK',
+  'AMBERNATH LINGERIES UNIT',
+  'SOIE',
+  'SACHIN GARMENT',
+  'GINZA LIFE STYLE'
 ];
 
 export const DISPLAY_UNITS: UnitKey[] = [
@@ -36,7 +41,12 @@ export const DISPLAY_UNITS: UnitKey[] = [
   'HEKTOR',
   'SUNSILK',
   'TORCHAN LACE',
-  'WARP WEFT FABRICS'
+  'WARP WEFT FABRICS',
+  'APPAREL PARK',
+  'AMBERNATH LINGERIES UNIT',
+  'SOIE',
+  'SACHIN GARMENT',
+  'GINZA LIFE STYLE'
 ];
 
 export const INITIAL_UNIT_DATA = { orderValue: 0, dispatchValue: 0 };

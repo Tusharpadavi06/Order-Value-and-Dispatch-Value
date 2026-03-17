@@ -16,6 +16,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
     unit: 'ALL', 
     range: 'all',
     selectedDate: new Date().toISOString().split('T')[0],
+    startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
     selectedMonth: new Date().getMonth(),
     selectedYear: new Date().getFullYear()
   });
@@ -42,6 +44,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
     
     if (filters.range === 'day' && filters.selectedDate) {
       result = result.filter(item => item.date === filters.selectedDate);
+    } else if (filters.range === 'range' && filters.startDate && filters.endDate) {
+      result = result.filter(item => {
+        const itemDate = item.date;
+        return itemDate >= filters.startDate! && itemDate <= filters.endDate!;
+      });
     } else if (filters.range === 'month') {
       result = result.filter(item => {
         const d = new Date(item.date);
@@ -178,7 +185,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
       {/* Control Panel / Filters */}
       <div className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm flex flex-wrap items-center gap-4 md:gap-6">
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-          {(['all', 'day', 'month', 'year'] as TimeFilter[]).map(r => (
+          {(['all', 'day', 'range', 'month', 'year'] as TimeFilter[]).map(r => (
             <button key={r} onClick={() => setFilters({...filters, range: r})} className={`px-4 md:px-6 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all ${filters.range === r ? 'bg-white text-[#E11D48] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
               {r}
             </button>
@@ -187,6 +194,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onRefresh, i
 
         {filters.range === 'day' && (
           <input type="date" value={filters.selectedDate} onChange={e => setFilters({...filters, selectedDate: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 font-black text-[10px] text-slate-900" />
+        )}
+        {filters.range === 'range' && (
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col">
+              <span className="text-[7px] font-black text-slate-400 uppercase ml-1">From</span>
+              <input type="date" value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 font-black text-[10px] text-slate-900" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[7px] font-black text-slate-400 uppercase ml-1">To</span>
+              <input type="date" value={filters.endDate} onChange={e => setFilters({...filters, endDate: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 font-black text-[10px] text-slate-900" />
+            </div>
+          </div>
         )}
         {filters.range === 'month' && (
           <div className="flex gap-2">
