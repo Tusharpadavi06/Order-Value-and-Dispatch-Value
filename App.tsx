@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { UNITS, DISPLAY_UNITS, INITIAL_FORM_STATE } from './constants';
+import { UNITS, DISPLAY_UNITS, INITIAL_FORM_STATE, ORDER_ENTRY_GOOGLE_SCRIPT_URL } from './constants';
 import { FormDataState, UnitKey, UnitData, SubmissionPayload } from './types';
 import { UnitRow } from './components/UnitRow';
 import { DashboardView } from './components/DashboardView';
@@ -8,7 +8,6 @@ import { formatIndianCurrency } from './utils';
 
 const SUPABASE_URL = "https://xhwixancggufvekyvyzg.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhod2l4YW5jZ2d1ZnZla3l2eXpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3MTcxMjEsImV4cCI6MjA4NjI5MzEyMX0.xbrsZw2JgndRptEN-DaLqbRUs9vU2WpwqvwMJhYdDfw";
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyM6m7LOuWzW5qUg8b9ynxP3EzMfE9zrz71eld3-r1U2pROK9-GwZ8sNBQSx-MnDe6/exec"; 
 
 const GinzaLogo = () => (
   <div className="flex items-center justify-center bg-white p-2 rounded-xl shadow-sm border border-slate-100">
@@ -124,7 +123,7 @@ const App: React.FC = () => {
       }
 
       // 2. Background Commit to Google Sheets (Fire and forget, no-cors)
-      fetch(GOOGLE_SCRIPT_URL, {
+      fetch(ORDER_ENTRY_GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -135,7 +134,8 @@ const App: React.FC = () => {
           totalOrder: totals.order,
           totalDispatch: totals.dispatch
         })
-      }).catch(err => console.error("Google Sheets Background Sync Fail:", err));
+      }).then(() => console.log("Google Sheets Sync: Success"))
+        .catch(err => console.error("Google Sheets Background Sync Fail:", err));
 
       setFormData(INITIAL_FORM_STATE);
       alert("Record successfully committed to the Hub.");
@@ -178,7 +178,7 @@ const App: React.FC = () => {
       }
 
       // 2. Sync to Google Sheets
-      fetch(GOOGLE_SCRIPT_URL, {
+      fetch(ORDER_ENTRY_GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -189,7 +189,8 @@ const App: React.FC = () => {
           totalOrder: updatedPayload.totalOrder,
           totalDispatch: updatedPayload.totalDispatch
         })
-      }).catch(err => console.error("Google Update Background Sync Fail:", err));
+      }).then(() => console.log("Google Sheets Update Sync: Success"))
+        .catch(err => console.error("Google Update Background Sync Fail:", err));
       
       alert("Changes saved and synced across all systems.");
       await fetchFromSupabase();

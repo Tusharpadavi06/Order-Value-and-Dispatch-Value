@@ -54,6 +54,8 @@ function doPost(e) {
     const incomingDateStr = data.date ? data.date.toString() : ""; 
 
     // 1. SEARCH FOR ROW BY ID OR DATE
+    const normalizedIncomingDate = normalizeDate(incomingDateStr);
+
     for (let i = 0; i < rows.length; i++) {
       // Match by ID (Column A)
       if (incomingId && rows[i][0] && rows[i][0].toString() === incomingId) {
@@ -62,25 +64,55 @@ function doPost(e) {
       }
       
       // Fallback: Match by Date (Column B)
-      if (incomingDateStr) {
+      if (normalizedIncomingDate) {
         let cellValue = rows[i][1]; 
-        let sheetDateStr = "";
+        let normalizedSheetDate = normalizeDate(cellValue);
         
-        if (cellValue instanceof Date) {
-          sheetDateStr = Utilities.formatDate(cellValue, tz, "yyyy-MM-dd");
-        } else if (cellValue) {
-          try {
-            sheetDateStr = Utilities.formatDate(new Date(cellValue), tz, "yyyy-MM-dd");
-          } catch(e) {
-            sheetDateStr = cellValue.toString();
-          }
-        }
-        
-        if (sheetDateStr === incomingDateStr) {
+        if (normalizedSheetDate === normalizedIncomingDate) {
           rowIndex = i;
           break;
         }
       }
+    }
+
+    // Helper to normalize dates to YYYY-MM-DD string
+    function normalizeDate(dateVal) {
+      if (!dateVal || dateVal === "N/A") return "";
+      try {
+        let d;
+        if (dateVal instanceof Date) {
+          // Use local components to avoid timezone shifts
+          return dateVal.getFullYear() + "-" + 
+                 ("0" + (dateVal.getMonth() + 1)).slice(-2) + "-" + 
+                 ("0" + dateVal.getDate()).slice(-2);
+        } else {
+          // Handle string dates
+          const dateStr = dateVal.toString().trim();
+          // Try standard parsing
+          d = new Date(dateStr);
+          
+          // If standard parsing fails or gives weird results, try manual split
+          if (isNaN(d.getTime())) {
+            const parts = dateStr.split(/[-/.\s]/);
+            if (parts.length === 3) {
+              // Assume YYYY-MM-DD or DD-MM-YYYY
+              if (parts[0].length === 4) {
+                return parts[0] + "-" + ("0" + parts[1]).slice(-2) + "-" + ("0" + parts[2]).slice(-2);
+              } else if (parts[2].length === 4) {
+                return parts[2] + "-" + ("0" + parts[1]).slice(-2) + "-" + ("0" + parts[0]).slice(-2);
+              }
+            }
+          }
+        }
+        
+        if (!isNaN(d.getTime())) {
+          // For parsed dates, use local components as well
+          return d.getFullYear() + "-" + 
+                 ("0" + (d.getMonth() + 1)).slice(-2) + "-" + 
+                 ("0" + d.getDate()).slice(-2);
+        }
+      } catch (e) {}
+      return dateVal ? dateVal.toString().trim() : "";
     }
 
     // 2. CONSTRUCT DATA ROW (Starting from Column B: Date + 16 Units * 2)
